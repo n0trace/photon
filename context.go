@@ -23,6 +23,9 @@ func (c *Context) SetRequest(req *http.Request) {
 func (c *Context) SetMeta(m map[string]interface{}) {
 	c.meta = m
 }
+func (c *Context) Meta() map[string]interface{} {
+	return c.meta
+}
 
 func (c *Context) Reset() {
 

@@ -15,6 +15,7 @@ func newTestServer() *httptest.Server {
 		w.WriteHeader(200)
 		w.Write([]byte(r.Header.Get("User-Agent")))
 	})
+
 	return httptest.NewServer(mux)
 }
 

@@ -6,8 +6,7 @@ type (
 	VisitOption struct {
 		Meta       map[string]interface{}
 		Client     *http.Client
-		Filter     bool
-		PreContext *Context
+		DontFilter bool
 	}
 
 	VisitOptionFunc func(*VisitOption)
@@ -25,14 +24,8 @@ func VisitWithClient(client *http.Client) VisitOptionFunc {
 	}
 }
 
-func VisitWithFiter(filter bool) VisitOptionFunc {
+func VisitWithDontFiter() VisitOptionFunc {
 	return func(option *VisitOption) {
-		option.Filter = filter
-	}
-}
-
-func VisitWithPreContext(ctx *Context) VisitOptionFunc {
-	return func(option *VisitOption) {
-		option.PreContext = ctx
+		option.DontFilter = true
 	}
 }

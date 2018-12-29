@@ -11,8 +11,7 @@ import (
 
 type Response struct {
 	*http.Response
-	text string
-	ctx  *Context
+	ctx *Context
 }
 
 func (resp *Response) Text() (text string, err error) {

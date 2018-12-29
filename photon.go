@@ -28,6 +28,7 @@ var (
 	filterMap  = make(map[string]bool)
 	filterFunc = func(r *http.Request) bool {
 		_, ok := filterMap[r.URL.String()]
+		filterMap[r.URL.String()] = true
 		return ok
 	}
 	newHTTPClientFunc = func() interface{} {
@@ -39,6 +40,8 @@ var (
 			Stage:  StageStructure,
 		}
 	}
+	callBackMutex   = &sync.RWMutex{}
+	middlewareMutex = &sync.RWMutex{}
 )
 
 type (
@@ -84,14 +87,18 @@ func (p *Photon) SetFilterFunc(f func(*http.Request) bool) {
 
 func (p *Photon) Use(middlewares ...MiddlewareFunc) {
 	if p.middleware == nil {
+		middlewareMutex.Lock()
 		p.middleware = nilHandler
+		middlewareMutex.Unlock()
 	}
 	h := p.middleware
 	// Chain middleware
 	for i := len(middlewares) - 1; i >= 0; i-- {
 		h = middlewares[i](h)
 	}
+	middlewareMutex.Lock()
 	p.middleware = h
+	middlewareMutex.Unlock()
 }
 
 func (p *Photon) Wait() {
@@ -132,12 +139,17 @@ func New(options ...PhotonOptionFunc) (p *Photon) {
 }
 
 func (p *Photon) On(action ActionType, CallBackFuncFunc HandlerFunc) {
+
 	before, ok := p.callBackFuncMap[action]
 	if ok {
+		callBackMutex.Lock()
 		p.callBackFuncMap[action] = append(before, CallBackFuncFunc)
+		callBackMutex.Unlock()
 		return
 	}
+	callBackMutex.Lock()
 	p.callBackFuncMap[action] = []HandlerFunc{CallBackFuncFunc}
+	callBackMutex.Unlock()
 }
 
 func (p *Photon) Visit(url string, visitOptions ...VisitOptionFunc) {
@@ -145,20 +157,17 @@ func (p *Photon) Visit(url string, visitOptions ...VisitOptionFunc) {
 }
 
 func (p *Photon) VisitRequest(req *http.Request, visitOptions ...VisitOptionFunc) {
-	done := p.filterFunc(req)
-	if done {
-		return
-	}
 	var visitOption = new(VisitOption)
 	for _, option := range visitOptions {
 		option(visitOption)
 	}
 
+	done := p.filterFunc(req)
+	if !visitOption.DontFilter && done {
+		return
+	}
 	ctx := p.contextPool.Get().(*Context)
 	ctx.Reset()
-	if visitOption.PreContext != nil {
-		ctx.Client = visitOption.PreContext.Client
-	}
 
 	ctx.SetMeta(visitOption.Meta)
 	if visitOption.Client != nil {
@@ -166,49 +175,64 @@ func (p *Photon) VisitRequest(req *http.Request, visitOptions ...VisitOptionFunc
 	}
 
 	ctx.SetRequest(req)
+	middlewareMutex.RLock()
+	middleware := p.middleware
+	middlewareMutex.RUnlock()
 
-	common.Must(p.middleware(ctx))
+	common.Must(middleware(ctx))
 
 	p.wait.Add(1)
-
 	p.parallelChan <- true
-	go p.process(ctx)
+
+	go func() {
+		defer p.wait.Done()
+		defer func() {
+			p.httpClientPool.Put(ctx.Client)
+			p.contextPool.Put(ctx)
+			<-p.parallelChan
+		}()
+		<-p.limitFunc()
+		p.process(ctx)
+	}()
 }
 
 func (p *Photon) process(ctx *Context) {
-	<-p.limitFunc()
-	defer p.wait.Done()
-	defer func() {
-		p.httpClientPool.Put(ctx.Client)
-		p.contextPool.Put(ctx)
-		<-p.parallelChan
-
-	}()
 	var err error
 	client := ctx.Client
 	req := ctx.Request()
 	var resp = new(Response)
+
+	callBackMutex.RLock()
 	OnRequestCBS := p.callBackFuncMap[OnRequest]
+	callBackMutex.RUnlock()
 	for _, cb := range OnRequestCBS {
 		cb(ctx)
 	}
-	common.Must(p.middleware(ctx))
+	middlewareMutex.RLock()
+	middleware := p.middleware
+	middlewareMutex.RUnlock()
+
+	common.Must(middleware(ctx))
 	ctx.Stage = StageDownloadBefore
 	resp.Response, err = client.Do(req)
 	ctx.Stage = StageDownloadAfter
 	ctx.Response = resp
 	ctx.SetError(err)
-	common.Must(p.middleware(ctx))
+	common.Must(middleware(ctx))
 
 	if ctx.Error() != nil {
+		callBackMutex.RLock()
 		OnErrorCBS := p.callBackFuncMap[OnError]
+		callBackMutex.RUnlock()
 		for _, cb := range OnErrorCBS {
 			cb(ctx)
 		}
 		return
 	}
 
+	callBackMutex.RLock()
 	OnResponseCBS := p.callBackFuncMap[OnResponse]
+	callBackMutex.RUnlock()
 	for _, cb := range OnResponseCBS {
 		cb(ctx)
 	}

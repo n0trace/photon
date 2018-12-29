@@ -14,8 +14,9 @@ import (
 )
 
 type RandomUAConfig struct {
-	Holder  Holder
-	Browser []string
+	Holder           Holder
+	Browser          []string
+	UserAgentJSONURL string
 }
 
 var (
@@ -24,16 +25,20 @@ var (
 	}
 
 	browserUserAgentMap   = make(map[string][]string)
-	userAgentJSONURL      = "https://user-agent.now.sh/useragent.json"
 	browserUserAgentSlice = []string{}
 	cacheUserAgentOnce    sync.Once
+	userAgentJSONURL      = "https://user-agent.now.sh/useragent.json"
 )
 
 func RandomUAWithConfig(config RandomUAConfig) photon.MiddlewareFunc {
 	if config.Holder == nil {
 		config.Holder = DownloadBeforeHolder
 	}
-	cacheUserAgentOnce.Do(func() { common.Must(cacheUserAgent()) })
+	var url = userAgentJSONURL
+	if config.UserAgentJSONURL != "" {
+		url = config.UserAgentJSONURL
+	}
+	cacheUserAgentOnce.Do(func() { common.Must(cacheUserAgent(url)) })
 	rand.Seed(time.Now().Unix())
 	return func(next photon.HandlerFunc) photon.HandlerFunc {
 		return func(ctx *photon.Context) error {
@@ -66,9 +71,9 @@ func RandomUserAgent(browsers ...string) photon.MiddlewareFunc {
 	return RandomUAWithConfig(config)
 }
 
-func cacheUserAgent() (err error) {
+func cacheUserAgent(url string) (err error) {
 	var resp *http.Response
-	resp, err = http.Get(userAgentJSONURL)
+	resp, err = http.Get(url)
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return
