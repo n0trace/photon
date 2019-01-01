@@ -33,7 +33,7 @@ func TestNew(t *testing.T) {
 		return out
 	}
 
-	filterFunc := func(r *http.Request) bool {
+	filterFunc := func(ctx *photon.Context) bool {
 		return true
 	}
 	photon.New(photon.WithFilterFunc(filterFunc))

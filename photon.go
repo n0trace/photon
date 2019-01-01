@@ -26,9 +26,9 @@ var (
 	}
 
 	filterMap  = make(map[string]bool)
-	filterFunc = func(r *http.Request) bool {
-		_, ok := filterMap[r.URL.String()]
-		filterMap[r.URL.String()] = true
+	filterFunc = func(ctx *Context) bool {
+		_, ok := filterMap[ctx.Request().URL.String()]
+		filterMap[ctx.Request().URL.String()] = true
 		return ok
 	}
 	newHTTPClientFunc = func() interface{} {
@@ -51,7 +51,7 @@ type (
 		middleware      HandlerFunc
 		callBackFuncMap map[ActionType][]HandlerFunc
 		wait            sync.WaitGroup
-		filterFunc      func(*http.Request) bool
+		filterFunc      func(*Context) bool
 		limitFunc       func() <-chan interface{}
 		parallelChan    chan interface{}
 	}
@@ -69,7 +69,7 @@ func WithParallel(parallel int) PhotonOptionFunc {
 	}
 }
 
-func WithFilterFunc(f func(*http.Request) bool) PhotonOptionFunc {
+func WithFilterFunc(f func(*Context) bool) PhotonOptionFunc {
 	return func(p *Photon) {
 		p.filterFunc = f
 	}
@@ -81,7 +81,7 @@ func WithLimitFunc(f func() <-chan interface{}) PhotonOptionFunc {
 	}
 }
 
-func (p *Photon) SetFilterFunc(f func(*http.Request) bool) {
+func (p *Photon) SetFilterFunc(f func(*Context) bool) {
 	p.filterFunc = f
 }
 
@@ -163,11 +163,6 @@ func (p *Photon) VisitRequest(req *http.Request, visitOptions ...VisitOptionFunc
 		option(visitOption)
 	}
 
-	done := p.filterFunc(req)
-	if !visitOption.DontFilter && done {
-		return
-	}
-
 	ctx := p.contextPool.Get().(*Context)
 	ctx.Reset()
 
@@ -177,6 +172,11 @@ func (p *Photon) VisitRequest(req *http.Request, visitOptions ...VisitOptionFunc
 	}
 
 	ctx.SetRequest(req)
+
+	done := p.filterFunc(ctx)
+	if !visitOption.DontFilter && done {
+		return
+	}
 
 	middlewareMutex.RLock()
 	middleware := p.middleware

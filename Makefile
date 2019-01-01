@@ -3,7 +3,7 @@
 all: dev run
 
 fmt:
-	goimports -l -w -local "gitlab.com/n0trace/photon" ./
+	goimports -l -w -local "github.com/n0trace/photon" ./
 
 
 test:
