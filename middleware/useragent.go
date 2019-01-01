@@ -72,8 +72,7 @@ func RandomUserAgent(browsers ...string) photon.MiddlewareFunc {
 }
 
 func cacheUserAgent(url string) (err error) {
-	var resp *http.Response
-	resp, err = http.Get(url)
+	resp, err := http.Get(url)
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return

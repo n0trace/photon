@@ -36,6 +36,6 @@ func TestNew(t *testing.T) {
 	filterFunc := func(r *http.Request) bool {
 		return true
 	}
-	photon.New(photon.WithFilter(filterFunc))
+	photon.New(photon.WithFilterFunc(filterFunc))
 	photon.New(photon.WithLimitFunc(limitFunc))
 }

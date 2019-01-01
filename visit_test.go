@@ -43,37 +43,44 @@ func TestVisitWithClient(t *testing.T) {
 	}
 }
 
-func TestVisitWithFilter(t *testing.T) {
+func TestVisitWithDontFilter(t *testing.T) {
 	server := newTestServer()
-	p1 := photon.New()
-	var times1, times2 int64
-	for i := 0; i < 10; i++ {
-		p1.Visit(server.URL + "/user-agent")
+	p := photon.New()
+	var times int64
+
+	p.On(photon.OnResponse, func(ctx *photon.Context) error {
+		atomic.AddInt64(&times, 1)
+		return nil
+	})
+
+	for i := 0; i < 100; i++ {
+		p.Visit(server.URL+"/user-agent", photon.VisitWithDontFiter())
 	}
 
-	p1.On(photon.OnResponse, func(ctx *photon.Context) error {
+	p.Wait()
+
+	if atomic.LoadInt64(&times) != 100 {
+		t.Errorf("VisitWithDontFilter() visit same url times = %v, want %v", atomic.LoadInt64(&times), 100)
+	}
+}
+
+func TestVisitWithFilter(t *testing.T) {
+	server := newTestServer()
+	p := photon.New()
+	var times1 int64
+
+	p.On(photon.OnResponse, func(ctx *photon.Context) error {
 		atomic.AddInt64(&times1, 1)
 		return nil
 	})
-	p1.Wait()
 
-	p2 := photon.New()
-	for i := 0; i < 10; i++ {
-		p2.Visit(server.URL+"/user-agent", photon.VisitWithDontFiter())
+	for i := 0; i < 100; i++ {
+		p.Visit(server.URL + "/user-agent")
 	}
 
-	p2.On(photon.OnResponse, func(ctx *photon.Context) error {
-		atomic.AddInt64(&times2, 1)
-		return nil
-	})
-
-	p2.Wait()
+	p.Wait()
 
 	if atomic.LoadInt64(&times1) != 1 {
 		t.Errorf("VisitWithFilter() visit same url times = %v, want %v", atomic.LoadInt64(&times1), 1)
-	}
-
-	if atomic.LoadInt64(&times2) != 10 {
-		t.Errorf("VisitWithFilter() visit same url times = %v, want %v", atomic.LoadInt64(&times2), 10)
 	}
 }

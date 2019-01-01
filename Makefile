@@ -7,4 +7,4 @@ fmt:
 
 
 test:
-	go test -race  -covermode=atomic ./ ./common ./middleware
+	go test -race  -covermode=atomic ./ ./common ./middleware -count 1

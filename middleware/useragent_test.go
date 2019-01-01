@@ -46,16 +46,21 @@ func TestRandomUserAgent(t *testing.T) {
 		t.Errorf("RandomUserAgent() useragent = %v, wantUserAgent %v", useragent, wantUserAgent)
 		return
 	}
+
 	p2 := photon.New()
-	p2.On(photon.OnResponse, func(ctx *photon.Context) error {
-		useragent, _ = ctx.Response.Text()
+	p2.Use(middleware.RandomUserAgent("ABACHOBot", "008", "!Susie", "ABrowse"))
+	p2.On(photon.OnResponse, func(ctx *photon.Context) (err error) {
+		useragent, err := ctx.Response.Text()
+		if err != nil {
+			t.Errorf("RandomUserAgent() error = %v", err)
+		}
 		if !strings.Contains(uajson, useragent) {
 			t.Errorf("RandomUserAgent() useragent = %v", useragent)
 		}
 		return nil
 	})
-	p2.Use(middleware.RandomUserAgent("ABACHOBot", "008", "!Susie", "ABrowse"))
-	for i := 0; i < 10; i++ {
+
+	for i := 0; i < 200; i++ {
 		p2.Visit(server.URL+"/user-agent", photon.VisitWithDontFiter())
 	}
 	p2.Wait()
@@ -70,7 +75,7 @@ func newTestServer() *httptest.Server {
 
 	mux.HandleFunc("/ua.json", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
-		w.Write([]byte(``))
+		w.Write([]byte(uajson))
 	})
 	return httptest.NewServer(mux)
 }

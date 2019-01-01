@@ -5,13 +5,17 @@ import (
 	"encoding/xml"
 	"io/ioutil"
 	"net/http"
+	"sync"
 
 	"github.com/PuerkitoBio/goquery"
 )
 
 type Response struct {
 	*http.Response
-	ctx *Context
+	ctx          *Context
+	bodyBytes    []byte
+	readBodyOnce sync.Once
+	err          error
 }
 
 func (resp *Response) Text() (text string, err error) {
@@ -20,9 +24,11 @@ func (resp *Response) Text() (text string, err error) {
 }
 
 func (resp *Response) Bytes() (bodyBytes []byte, err error) {
-	bodyBytes, err = ioutil.ReadAll(resp.Response.Body)
-	defer resp.Response.Body.Close()
-	return
+	resp.readBodyOnce.Do(func() {
+		resp.bodyBytes, resp.err = ioutil.ReadAll(resp.Body)
+		defer resp.Body.Close()
+	})
+	return resp.bodyBytes, resp.err
 }
 
 func (resp *Response) JSON(i interface{}) (err error) {
