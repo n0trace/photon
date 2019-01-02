@@ -53,6 +53,7 @@ type (
 		wait            sync.WaitGroup
 		filterFunc      func(*Context) bool
 		limitFunc       func() <-chan interface{}
+		limitChan       <-chan interface{}
 		parallelChan    chan interface{}
 	}
 
@@ -83,6 +84,10 @@ func WithLimitFunc(f func() <-chan interface{}) PhotonOptionFunc {
 
 func (p *Photon) SetFilterFunc(f func(*Context) bool) {
 	p.filterFunc = f
+}
+func (p *Photon) SetLimitFunc(f func() <-chan interface{}) {
+	p.limitFunc = f
+	p.limitChan = p.limitFunc()
 }
 
 func (p *Photon) Use(middlewares ...MiddlewareFunc) {
@@ -132,7 +137,7 @@ func New(options ...PhotonOptionFunc) (p *Photon) {
 	if p.limitFunc == nil {
 		p.limitFunc = limitFunc
 	}
-
+	p.limitChan = p.limitFunc()
 	p.parallelChan = make(chan interface{}, parallelNumber)
 	p.middleware = nilHandler
 	return p
@@ -193,7 +198,7 @@ func (p *Photon) VisitRequest(req *http.Request, visitOptions ...VisitOptionFunc
 		defer func() {
 			<-p.parallelChan
 		}()
-		<-p.limitFunc()
+		<-p.limitChan
 		p.process(ctx)
 	}(ctx)
 }
