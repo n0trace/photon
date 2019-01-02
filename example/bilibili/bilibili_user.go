@@ -40,9 +40,10 @@ func main() {
 		photon.WithLimitFunc(limitFunc),
 	)
 	p.Use(middleware.RandomUserAgent("ABACHOBot", "008"))
-	p.On(photon.OnResponse, func(ctx *photon.Context) (err error) {
+
+	p.OnResponse(func(ctx *photon.Context) {
 		var resp = new(BilibiResp)
-		err = ctx.JSON(resp)
+		err := ctx.JSON(resp)
 		if err != nil {
 			log.Println(err)
 			return
@@ -51,15 +52,8 @@ func main() {
 		return
 	})
 
-	p.On(photon.OnRequest, func(ctx *photon.Context) (err error) {
-		req := ctx.Request()
-		req.Header.Set("Content-Type", "application/json")
-		return nil
-	})
-
-	p.On(photon.OnError, func(ctx *photon.Context) (err error) {
+	p.OnError(func(ctx *photon.Context) {
 		log.Println(ctx.Error())
-		return nil
 	})
 
 	for i := 1; i < 10000; i++ {

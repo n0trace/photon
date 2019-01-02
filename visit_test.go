@@ -16,9 +16,8 @@ func TestVisitWithMeta(t *testing.T) {
 	meta := map[string]interface{}{"hello": "world"}
 	var respMeta map[string]interface{}
 	p.Visit(server.URL+"/user-agent", photon.VisitWithMeta(meta))
-	p.On(photon.OnResponse, func(ctx *photon.Context) error {
+	p.OnResponse(func(ctx *photon.Context) {
 		respMeta = ctx.Meta()
-		return nil
 	})
 	p.Wait()
 	if !reflect.DeepEqual(meta, respMeta) {
@@ -33,9 +32,8 @@ func TestVisitWithClient(t *testing.T) {
 	}
 	var wantClient *http.Client
 	p.Visit(newTestServer().URL+"/user-agent", photon.VisitWithClient(client))
-	p.On(photon.OnResponse, func(ctx *photon.Context) error {
+	p.OnResponse(func(ctx *photon.Context) {
 		wantClient = ctx.Client
-		return nil
 	})
 	p.Wait()
 	if !reflect.DeepEqual(client, wantClient) {
@@ -48,9 +46,9 @@ func TestVisitWithDontFilter(t *testing.T) {
 	p := photon.New()
 	var times int64
 
-	p.On(photon.OnResponse, func(ctx *photon.Context) error {
+	p.OnResponse(func(ctx *photon.Context) {
 		atomic.AddInt64(&times, 1)
-		return nil
+		return
 	})
 
 	for i := 0; i < 100; i++ {
@@ -69,9 +67,9 @@ func TestVisitWithFilter(t *testing.T) {
 	p := photon.New()
 	var times1 int64
 
-	p.On(photon.OnResponse, func(ctx *photon.Context) error {
+	p.OnResponse(func(ctx *photon.Context) {
 		atomic.AddInt64(&times1, 1)
-		return nil
+		return
 	})
 
 	for i := 0; i < 100; i++ {

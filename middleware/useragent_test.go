@@ -36,9 +36,8 @@ func TestRandomUserAgent(t *testing.T) {
 	var useragent string
 	var wantUserAgent = "ABACHOBot"
 	p.Use(middleware.RandomUserAgent("ABACHOBot"))
-	p.On(photon.OnResponse, func(ctx *photon.Context) error {
+	p.OnResponse(func(ctx *photon.Context) {
 		useragent, _ = ctx.Response.Text()
-		return nil
 	})
 	p.Visit(server.URL + "/user-agent")
 	p.Wait()
@@ -49,7 +48,7 @@ func TestRandomUserAgent(t *testing.T) {
 
 	p2 := photon.New()
 	p2.Use(middleware.RandomUserAgent("ABACHOBot", "008", "!Susie", "ABrowse"))
-	p2.On(photon.OnResponse, func(ctx *photon.Context) (err error) {
+	p2.OnResponse(func(ctx *photon.Context) {
 		useragent, err := ctx.Response.Text()
 		if err != nil {
 			t.Errorf("RandomUserAgent() error = %v", err)
@@ -57,7 +56,6 @@ func TestRandomUserAgent(t *testing.T) {
 		if !strings.Contains(uajson, useragent) {
 			t.Errorf("RandomUserAgent() useragent = %v", useragent)
 		}
-		return nil
 	})
 
 	for i := 0; i < 200; i++ {

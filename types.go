@@ -6,13 +6,11 @@ type (
 )
 
 const (
-	OnRequest ActionType = iota
-	OnResponse
-	OnError
-
 	StageStructure ContextStage = iota
 	StageDispatchBefore
 	StageDispatchAfter
 	StageDownloadBefore
 	StageDownloadAfter
+	StateCallbackBefore
+	StateCallbackAfter
 )

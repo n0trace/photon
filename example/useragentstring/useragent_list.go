@@ -15,7 +15,7 @@ var (
 
 func main() {
 	p := photon.New()
-	p.On(photon.OnResponse, func(ctx *photon.Context) (err error) {
+	p.OnResponse(func(ctx *photon.Context) {
 		document, err := ctx.Document()
 		if err != nil {
 			panic(err)
@@ -31,10 +31,9 @@ func main() {
 			panic(err)
 		}
 		fmt.Println(string(bs))
-		return
 	})
 
-	p.On(photon.OnError, func(ctx *photon.Context) (err error) {
+	p.OnError(func(ctx *photon.Context) {
 		panic(ctx.Error())
 	})
 

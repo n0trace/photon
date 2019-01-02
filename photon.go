@@ -10,12 +10,12 @@ import (
 
 var (
 	parallelNumber = 64
-	nilHandler     = func(*Context) error {
-		return nil
+	nilHandler     = func(*Context) {
+		return
 	}
 
-	ticker    = time.NewTicker(time.Microsecond)
 	limitFunc = func() <-chan interface{} {
+		var ticker = time.NewTicker(time.Microsecond)
 		out := make(chan interface{})
 		go func() {
 			for t := range ticker.C {
@@ -31,33 +31,37 @@ var (
 		filterMap[ctx.Request().URL.String()] = true
 		return ok
 	}
+
 	newHTTPClientFunc = func() interface{} {
 		return http.DefaultClient
 	}
+
 	newContextFunc = func() *Context {
 		return &Context{
 			Client: newHTTPClientFunc().(*http.Client),
 			Stage:  StageStructure,
 		}
 	}
-	callBackMutex   = &sync.RWMutex{}
-	middlewareMutex = &sync.RWMutex{}
+
+	callBackRWMutex   = &sync.RWMutex{}
+	middlewareRWMutex = &sync.RWMutex{}
 )
 
 type (
 	Photon struct {
-		httpClientPool  sync.Pool
-		contextPool     sync.Pool
-		middleware      HandlerFunc
-		callBackFuncMap map[ActionType][]HandlerFunc
-		wait            sync.WaitGroup
-		filterFunc      func(*Context) bool
-		limitFunc       func() <-chan interface{}
-		limitChan       <-chan interface{}
-		parallelChan    chan interface{}
+		httpClientPool sync.Pool
+		contextPool    sync.Pool
+		middleware     HandlerFunc
+		respCallBack   HandlerFunc
+		errCallBack    HandlerFunc
+		wait           sync.WaitGroup
+		filterFunc     func(*Context) bool
+		limitFunc      func() <-chan interface{}
+		limitChan      <-chan interface{}
+		parallelChan   chan interface{}
 	}
 
-	HandlerFunc func(*Context) error
+	HandlerFunc func(*Context)
 
 	MiddlewareFunc func(HandlerFunc) HandlerFunc
 
@@ -82,28 +86,29 @@ func WithLimitFunc(f func() <-chan interface{}) PhotonOptionFunc {
 	}
 }
 
-func (p *Photon) SetFilterFunc(f func(*Context) bool) {
+func (p *Photon) ApplyFilterFunc(f func(*Context) bool) {
 	p.filterFunc = f
 }
-func (p *Photon) SetLimitFunc(f func() <-chan interface{}) {
+
+func (p *Photon) ApplyLimitFunc(f func() <-chan interface{}) {
 	p.limitFunc = f
 	p.limitChan = p.limitFunc()
 }
 
 func (p *Photon) Use(middlewares ...MiddlewareFunc) {
 	if p.middleware == nil {
-		middlewareMutex.Lock()
+		middlewareRWMutex.Lock()
 		p.middleware = nilHandler
-		middlewareMutex.Unlock()
+		middlewareRWMutex.Unlock()
 	}
 	h := p.middleware
 	// Chain middleware
 	for i := len(middlewares) - 1; i >= 0; i-- {
 		h = middlewares[i](h)
 	}
-	middlewareMutex.Lock()
+	middlewareRWMutex.Lock()
 	p.middleware = h
-	middlewareMutex.Unlock()
+	middlewareRWMutex.Unlock()
 }
 
 func (p *Photon) Wait() {
@@ -125,11 +130,6 @@ func New(options ...PhotonOptionFunc) (p *Photon) {
 		return newContextFunc()
 	}
 
-	p.callBackFuncMap = make(map[ActionType][]HandlerFunc)
-	p.callBackFuncMap[OnRequest] = []HandlerFunc{}
-	p.callBackFuncMap[OnResponse] = []HandlerFunc{}
-	p.callBackFuncMap[OnError] = []HandlerFunc{}
-
 	if p.filterFunc == nil {
 		p.filterFunc = filterFunc
 	}
@@ -137,25 +137,24 @@ func New(options ...PhotonOptionFunc) (p *Photon) {
 	if p.limitFunc == nil {
 		p.limitFunc = limitFunc
 	}
-	p.limitChan = p.limitFunc()
+
+	p.ApplyLimitFunc(p.limitFunc)
+
 	p.parallelChan = make(chan interface{}, parallelNumber)
 	p.middleware = nilHandler
 	return p
 }
 
-func (p *Photon) On(action ActionType, CallBackFuncFunc HandlerFunc) {
-	callBackMutex.RLock()
-	before, ok := p.callBackFuncMap[action]
-	callBackMutex.RUnlock()
-	if ok {
-		callBackMutex.Lock()
-		p.callBackFuncMap[action] = append(before, CallBackFuncFunc)
-		callBackMutex.Unlock()
-		return
-	}
-	callBackMutex.Lock()
-	p.callBackFuncMap[action] = []HandlerFunc{CallBackFuncFunc}
-	callBackMutex.Unlock()
+func (p *Photon) OnResponse(cb HandlerFunc) {
+	callBackRWMutex.Lock()
+	p.respCallBack = cb
+	callBackRWMutex.Unlock()
+}
+
+func (p *Photon) OnError(cb HandlerFunc) {
+	callBackRWMutex.Lock()
+	p.errCallBack = cb
+	callBackRWMutex.Unlock()
 }
 
 func (p *Photon) Visit(url string, visitOptions ...VisitOptionFunc) {
@@ -183,11 +182,7 @@ func (p *Photon) VisitRequest(req *http.Request, visitOptions ...VisitOptionFunc
 		return
 	}
 
-	middlewareMutex.RLock()
-	middleware := p.middleware
-	middlewareMutex.RUnlock()
-
-	common.Must(middleware(ctx))
+	p.middleware(ctx)
 
 	p.wait.Add(1)
 	p.parallelChan <- true
@@ -210,35 +205,24 @@ func (p *Photon) process(ctx *Context) {
 	req := ctx.Request()
 	var resp = new(Response)
 
-	callBackMutex.RLock()
-	callBackMap := p.callBackFuncMap
-	OnRequestCBS := callBackMap[OnRequest]
-	OnResponseCBS := callBackMap[OnResponse]
-	OnErrorCBS := callBackMap[OnError]
-	callBackMutex.RUnlock()
-	for _, cb := range OnRequestCBS {
-		_ = cb(ctx)
-	}
-	middlewareMutex.RLock()
-	middleware := p.middleware
-	middlewareMutex.RUnlock()
+	p.middleware(ctx)
 
-	common.Must(middleware(ctx))
 	ctx.Stage = StageDownloadBefore
 	resp.Response, err = client.Do(req)
 	ctx.Stage = StageDownloadAfter
 	ctx.Response = resp
 	ctx.SetError(err)
-	common.Must(middleware(ctx))
+
+	p.middleware(ctx)
 
 	if ctx.Error() != nil {
-		for _, cb := range OnErrorCBS {
-			_ = cb(ctx)
-		}
+		callBackRWMutex.RLock()
+		p.errCallBack(ctx)
+		callBackRWMutex.RUnlock()
 		return
 	}
 
-	for _, cb := range OnResponseCBS {
-		_ = cb(ctx)
-	}
+	callBackRWMutex.RLock()
+	p.respCallBack(ctx)
+	callBackRWMutex.RUnlock()
 }

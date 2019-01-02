@@ -42,9 +42,9 @@ func RandomUAWithConfig(config RandomUAConfig) photon.MiddlewareFunc {
 	cacheUserAgentOnce.Do(func() { common.Must(cacheUserAgent(url)) })
 	rand.Seed(time.Now().Unix())
 	return func(next photon.HandlerFunc) photon.HandlerFunc {
-		return func(ctx *photon.Context) error {
+		return func(ctx *photon.Context) {
 			if !config.Holder(ctx) {
-				return next(ctx)
+				next(ctx)
 			}
 			if len(config.Browser) == 0 {
 				idx := rand.Intn(len(browserUserAgentSlice) - 1)
@@ -61,7 +61,7 @@ func RandomUAWithConfig(config RandomUAConfig) photon.MiddlewareFunc {
 				}
 				ctx.Request().Header.Set("User-Agent", uaSlice[uaIdx])
 			}
-			return next(ctx)
+			next(ctx)
 		}
 	}
 }
