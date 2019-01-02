@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -72,7 +73,15 @@ func RandomUserAgent(browsers ...string) photon.MiddlewareFunc {
 }
 
 func cacheUserAgent(url string) (err error) {
-	resp, err := http.Get(url)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	client := &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: tr,
+	}
+	resp, err := client.Get(url)
 	if err != nil {
 		return
 	}
