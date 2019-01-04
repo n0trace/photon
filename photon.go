@@ -205,9 +205,9 @@ func (p *Photon) process(ctx *Context) {
 	req := ctx.Request()
 	var resp = new(Response)
 
+	ctx.Stage = StageDownloadBefore
 	p.middleware(ctx)
 
-	ctx.Stage = StageDownloadBefore
 	resp.Response, err = client.Do(req)
 	ctx.Stage = StageDownloadAfter
 	ctx.Response = resp

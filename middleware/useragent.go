@@ -22,7 +22,7 @@ type RandomUAConfig struct {
 
 var (
 	DefaultRandomUAConfig = RandomUAConfig{
-		Holder: DefaultHolder,
+		Holder: DownloadBeforeHolder,
 	}
 
 	browserUserAgentMap   = make(map[string][]string)
@@ -45,6 +45,7 @@ func RandomUAWithConfig(config RandomUAConfig) photon.MiddlewareFunc {
 		return func(ctx *photon.Context) {
 			if !config.Holder(ctx) {
 				next(ctx)
+				return
 			}
 			if len(config.Browser) == 0 {
 				idx := rand.Intn(len(browserUserAgentSlice) - 1)
