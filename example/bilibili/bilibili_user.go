@@ -10,55 +10,34 @@ import (
 )
 
 type (
-	BilibiliUser struct {
-		Card *struct {
-			Name string `json:"name"`
-			Sex  string `json:"sex"`
-		} `json:"card"`
-	}
 	BilibiResp struct {
-		Data *BilibiliUser `json:"data"`
-	}
-)
-
-var (
-	ticker    = time.NewTicker(time.Microsecond)
-	limitFunc = func() <-chan interface{} {
-		out := make(chan interface{})
-		go func() {
-			for t := range ticker.C {
-				out <- t
-			}
-		}()
-		return out
+		Data struct {
+			Card *struct {
+				Name string `json:"name"`
+				Sex  string `json:"sex"`
+			} `json:"card"`
+		} `json:"data"`
 	}
 )
 
 func main() {
-	p := photon.New(
-		photon.WithParallel(100),
-		photon.WithLimitFunc(limitFunc),
+	p := photon.New()
+	p.Use(
+		middleware.Limit(time.Second),
+		middleware.UserAgent(),
+		middleware.Header(map[string]string{"Accept-Encoding": "gzip"}),
 	)
-	p.Use(middleware.RandomUserAgent("ABACHOBot", "008"))
-
-	p.OnResponse(func(ctx *photon.Context) {
-		var resp = new(BilibiResp)
-		err := ctx.JSON(resp)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		fmt.Println(resp.Data.Card)
-		return
-	})
-
-	p.OnError(func(ctx *photon.Context) {
-		log.Println(ctx.Error())
-	})
 
 	for i := 1; i < 10000; i++ {
-		p.Visit(fmt.Sprint("https://api.bilibili.com/x/web-interface/card?mid=", i), photon.VisitWithMeta(map[string]interface{}{}))
+		go p.Get(fmt.Sprint("https://api.bilibili.com/x/web-interface/card?mid=", i), func(ctx photon.Context) {
+			var resp = new(BilibiResp)
+			err := ctx.JSON(resp)
+			if err != nil {
+				log.Println("bilibili error", err)
+				return
+			}
+			fmt.Println(resp.Data.Card)
+		})
 	}
-
 	p.Wait()
 }

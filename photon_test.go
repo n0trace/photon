@@ -1,41 +1,54 @@
 package photon_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/n0trace/photon"
 )
 
+func TestPhoton(t *testing.T) {
+	p := photon.New()
+	var executionCount int64
+	for i := 0; i < 10; i++ {
+		p.Get(newTestServer().URL+"/users?id="+fmt.Sprint(i), func(ctx photon.Context) {
+			atomic.AddInt64(&executionCount, 1)
+			_, err := ctx.Text()
+			if err != nil {
+				t.Errorf("ctx.Text().err = %v, want %v", err, nil)
+			}
+		})
+	}
+	p.Wait()
+	if executionCount != 10 {
+		t.Errorf("execution count = %v, want %v", executionCount, 10)
+	}
+}
+
 func newTestServer() *httptest.Server {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/user-agent", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(200)
-		w.Write([]byte(r.Header.Get("User-Agent")))
+	mux.HandleFunc("/users", func(w http.ResponseWriter, r *http.Request) {
+		u, err := url.Parse(r.RequestURI)
+		if err != nil {
+			panic(err)
+		}
+		w.Write([]byte(u.Query().Get("id")))
+	})
+
+	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+		cookie := http.Cookie{Name: "username", Value: r.FormValue("username"), Path: "/", MaxAge: 86400}
+		http.SetCookie(w, &cookie)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("/must-login", func(w http.ResponseWriter, r *http.Request) {
+		cookie, _ := r.Cookie("username")
+		w.Write([]byte("hello " + cookie.Value))
 	})
 
 	return httptest.NewServer(mux)
-}
-
-func TestNew(t *testing.T) {
-	photon.New()
-	photon.New(photon.WithParallel(100))
-	ticker := time.NewTicker(time.Second)
-	limitFunc := func() <-chan interface{} {
-		out := make(chan interface{})
-		go func() {
-			for t := range ticker.C {
-				out <- t
-			}
-		}()
-		return out
-	}
-
-	filterFunc := func(ctx *photon.Context) bool {
-		return true
-	}
-	photon.New(photon.WithFilterFunc(filterFunc))
-	photon.New(photon.WithLimitFunc(limitFunc))
 }
