@@ -42,11 +42,11 @@ var (
 )
 
 func TestResponse_Text(t *testing.T) {
-	ctx := &photon.Context{}
+	p := photon.New()
+	ctx := p.NewContext()
 	resp := new(http.Response)
 	resp.Body = ioutil.NopCloser(bytes.NewBufferString(htmlBody))
-	ctx.Response = new(photon.Response)
-	ctx.Response.Response = resp
+	ctx.SetStdResponse(resp)
 
 	var wantText = htmlBody
 	gotText, err := ctx.Text()
@@ -60,11 +60,11 @@ func TestResponse_Text(t *testing.T) {
 }
 
 func TestResponse_Bytes(t *testing.T) {
-	ctx := &photon.Context{}
+	p := photon.New()
+	ctx := p.NewContext()
 	resp := new(http.Response)
 	resp.Body = ioutil.NopCloser(bytes.NewBufferString(htmlBody))
-	ctx.Response = new(photon.Response)
-	ctx.Response.Response = resp
+	ctx.SetStdResponse(resp)
 
 	var wantBytes = []byte(htmlBody)
 	gotBytes, err := ctx.Bytes()
@@ -79,12 +79,11 @@ func TestResponse_Bytes(t *testing.T) {
 }
 
 func TestResponse_Document(t *testing.T) {
-	ctx := &photon.Context{}
+	p := photon.New()
+	ctx := p.NewContext()
 	resp := new(http.Response)
 	resp.Body = ioutil.NopCloser(bytes.NewBufferString(htmlBody))
-	ctx.Response = new(photon.Response)
-	ctx.Response.Response = resp
-	ctx.Response.Response.Request = new(http.Request)
+	ctx.SetStdResponse(resp)
 
 	gotDocument, err := ctx.Document()
 	if err != nil {
@@ -99,12 +98,11 @@ func TestResponse_Document(t *testing.T) {
 }
 
 func TestResponse_JSON(t *testing.T) {
-	ctx := &photon.Context{}
+	p := photon.New()
+	ctx := p.NewContext()
 	resp := new(http.Response)
 	resp.Body = ioutil.NopCloser(bytes.NewBufferString(jsonBody))
-	ctx.Response = new(photon.Response)
-	ctx.Response.Response = resp
-
+	ctx.SetStdResponse(resp)
 	type User struct {
 		Name string `json:"username"`
 		Page string `json:"page"`
@@ -128,11 +126,11 @@ func TestResponse_JSON(t *testing.T) {
 }
 
 func TestResponse_XML(t *testing.T) {
-	ctx := &photon.Context{}
+	p := photon.New()
+	ctx := p.NewContext()
 	resp := new(http.Response)
 	resp.Body = ioutil.NopCloser(bytes.NewBufferString(xmlBody))
-	ctx.Response = new(photon.Response)
-	ctx.Response.Response = resp
+	ctx.SetStdResponse(resp)
 
 	type User struct {
 		Name string `xml:"username"`
@@ -154,5 +152,4 @@ func TestResponse_XML(t *testing.T) {
 		t.Errorf("Response.XML() page = %v, wantPage %v", user.Page, wantPage)
 		return
 	}
-
 }

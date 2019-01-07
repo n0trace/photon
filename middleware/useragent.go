@@ -1,110 +1,49 @@
 package middleware
 
 import (
-	"crypto/tls"
-	"encoding/json"
-	"errors"
-	"io/ioutil"
 	"math/rand"
-	"net/http"
-	"sync"
 	"time"
 
 	"github.com/n0trace/photon"
-	"github.com/n0trace/photon/common"
 )
 
-type RandomUAConfig struct {
-	Holder           Holder
-	Browser          []string
-	UserAgentJSONURL string
+var defaultUserAgentList = []string{
+	"Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X x.y; rv:42.0) Gecko/20100101 Firefox/42.0",
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36",
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.106 Safari/537.36 OPR/38.0.2220.41",
+	"Mozilla/5.0 (iPhone; CPU iPhone OS 10_3_1 like Mac OS X) AppleWebKit/603.1.30 (KHTML, like Gecko) Version/10.0 Mobile/14E304 Safari/602.1",
+	"Mozilla/5.0 (compatible; MSIE 9.0; Windows Phone OS 7.5; Trident/5.0; IEMobile/9.0)",
+	"Googlebot/2.1 (+http://www.google.com/bot.html)",
 }
 
-var (
-	DefaultRandomUAConfig = RandomUAConfig{
-		Holder: DownloadBeforeHolder,
-	}
+type UserAgentConfig struct {
+	UserAgent []string
+}
 
-	browserUserAgentMap   = make(map[string][]string)
-	browserUserAgentSlice = []string{}
-	cacheUserAgentOnce    sync.Once
-	userAgentJSONURL      = "https://user-agent.now.sh/useragent.json"
-)
+func UserAgent(useragents ...string) photon.MiddlewareFunc {
+	if len(useragents) == 0 {
+		useragents = defaultUserAgentList
+	}
+	config := UserAgentConfig{
+		UserAgent: useragents,
+	}
+	return UserAgentWithConfig(config)
+}
 
-func RandomUAWithConfig(config RandomUAConfig) photon.MiddlewareFunc {
-	if config.Holder == nil {
-		config.Holder = DownloadBeforeHolder
-	}
-	var url = userAgentJSONURL
-	if config.UserAgentJSONURL != "" {
-		url = config.UserAgentJSONURL
-	}
-	cacheUserAgentOnce.Do(func() { common.Must(cacheUserAgent(url)) })
+func UserAgentWithConfig(config UserAgentConfig) photon.MiddlewareFunc {
 	rand.Seed(time.Now().Unix())
 	return func(next photon.HandlerFunc) photon.HandlerFunc {
-		return func(ctx *photon.Context) {
-			if !config.Holder(ctx) {
-				next(ctx)
+		return func(ctx photon.Context) {
+			defer next(ctx)
+			if ctx.Error() != nil || ctx.Downloaded() {
 				return
 			}
-			if len(config.Browser) == 0 {
-				idx := rand.Intn(len(browserUserAgentSlice) - 1)
-				ctx.Request().Header.Set("User-Agent", browserUserAgentSlice[idx])
-			} else {
-				var browserIdx, uaIdx int
-				if len(config.Browser) > 1 {
-					browserIdx = rand.Intn(len(config.Browser) - 1)
-				}
-				browser := config.Browser[browserIdx]
-				uaSlice := browserUserAgentMap[browser]
-				if len(uaSlice) > 1 {
-					uaIdx = rand.Intn(len(uaSlice) - 1)
-				}
-				ctx.Request().Header.Set("User-Agent", uaSlice[uaIdx])
+			var idx int
+			if len(config.UserAgent) > 1 {
+				idx = rand.Intn(len(config.UserAgent) - 1)
 			}
-			next(ctx)
+			ctx.Request().Header.Set("User-Agent", config.UserAgent[idx])
 		}
 	}
-}
-
-func RandomUserAgent(browsers ...string) photon.MiddlewareFunc {
-	config := DefaultRandomUAConfig
-	config.Browser = browsers
-	return RandomUAWithConfig(config)
-}
-
-func cacheUserAgent(url string) (err error) {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-
-	client := &http.Client{
-		Timeout:   30 * time.Second,
-		Transport: tr,
-	}
-	resp, err := client.Get(url)
-	if err != nil {
-		return
-	}
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-	err = json.Unmarshal(bodyBytes, &browserUserAgentMap)
-	if err != nil {
-		return
-	}
-	for _, value := range browserUserAgentMap {
-		browserUserAgentSlice = append(browserUserAgentSlice, value...)
-	}
-	for browser, ualist := range browserUserAgentMap {
-		if len(ualist) == 0 {
-			delete(browserUserAgentMap, browser)
-		}
-	}
-	if len(browserUserAgentSlice) == 0 {
-		panic(errors.New("user-agent nil"))
-	}
-	return
 }

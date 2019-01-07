@@ -1,12 +1,9 @@
 package photon_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"testing"
-	"time"
-
-	"github.com/n0trace/photon"
 )
 
 func newTestServer() *httptest.Server {
@@ -16,26 +13,23 @@ func newTestServer() *httptest.Server {
 		w.Write([]byte(r.Header.Get("User-Agent")))
 	})
 
-	return httptest.NewServer(mux)
-}
-
-func TestNew(t *testing.T) {
-	photon.New()
-	photon.New(photon.WithParallel(100))
-	ticker := time.NewTicker(time.Second)
-	limitFunc := func() <-chan interface{} {
-		out := make(chan interface{})
-		go func() {
-			for t := range ticker.C {
-				out <- t
+	mux.HandleFunc("/cookies", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			cookies := &http.Cookie{Name: r.FormValue("name"), Value: r.FormValue("value")}
+			http.SetCookie(w, cookies)
+			w.WriteHeader(http.StatusOK)
+		case "GET":
+			bs, err := json.Marshal(r.Cookies)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
 			}
-		}()
-		return out
-	}
+			w.WriteHeader(http.StatusOK)
+			w.Write(bs)
+		default:
+		}
+	})
 
-	filterFunc := func(ctx *photon.Context) bool {
-		return true
-	}
-	photon.New(photon.WithFilterFunc(filterFunc))
-	photon.New(photon.WithLimitFunc(limitFunc))
+	return httptest.NewServer(mux)
 }
