@@ -7,8 +7,7 @@ type Context struct {
 	error   error
 	request *http.Request
 	*http.Client
-	meta  map[string]interface{}
-	Stage ContextStage
+	meta map[string]interface{}
 }
 
 func (c *Context) Request() *http.Request {

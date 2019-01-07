@@ -15,16 +15,11 @@ import (
 )
 
 type RandomUAConfig struct {
-	Holder           Holder
 	Browser          []string
 	UserAgentJSONURL string
 }
 
 var (
-	DefaultRandomUAConfig = RandomUAConfig{
-		Holder: DownloadBeforeHolder,
-	}
-
 	browserUserAgentMap   = make(map[string][]string)
 	browserUserAgentSlice = []string{}
 	cacheUserAgentOnce    sync.Once
@@ -32,21 +27,15 @@ var (
 )
 
 func RandomUAWithConfig(config RandomUAConfig) photon.MiddlewareFunc {
-	if config.Holder == nil {
-		config.Holder = DownloadBeforeHolder
-	}
 	var url = userAgentJSONURL
 	if config.UserAgentJSONURL != "" {
 		url = config.UserAgentJSONURL
 	}
+
 	cacheUserAgentOnce.Do(func() { common.Must(cacheUserAgent(url)) })
 	rand.Seed(time.Now().Unix())
-	return func(next photon.HandlerFunc) photon.HandlerFunc {
-		return func(ctx *photon.Context) {
-			if !config.Holder(ctx) {
-				next(ctx)
-				return
-			}
+	return func(p *photon.Photon) {
+		p.OnRequest(func(ctx *photon.Context) {
 			if len(config.Browser) == 0 {
 				idx := rand.Intn(len(browserUserAgentSlice) - 1)
 				ctx.Request().Header.Set("User-Agent", browserUserAgentSlice[idx])
@@ -62,13 +51,12 @@ func RandomUAWithConfig(config RandomUAConfig) photon.MiddlewareFunc {
 				}
 				ctx.Request().Header.Set("User-Agent", uaSlice[uaIdx])
 			}
-			next(ctx)
-		}
+		})
 	}
 }
 
 func RandomUserAgent(browsers ...string) photon.MiddlewareFunc {
-	config := DefaultRandomUAConfig
+	config := RandomUAConfig{}
 	config.Browser = browsers
 	return RandomUAWithConfig(config)
 }

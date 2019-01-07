@@ -10,9 +10,6 @@ import (
 
 var (
 	parallelNumber = 64
-	nilHandler     = func(*Context) {
-		return
-	}
 
 	limitFunc = func() <-chan interface{} {
 		var ticker = time.NewTicker(time.Microsecond)
@@ -39,32 +36,33 @@ var (
 	newContextFunc = func() *Context {
 		return &Context{
 			Client: newHTTPClientFunc().(*http.Client),
-			Stage:  StageStructure,
 		}
 	}
 
-	callBackRWMutex   = &sync.RWMutex{}
-	middlewareRWMutex = &sync.RWMutex{}
+	callBackRWMutex = &sync.RWMutex{}
 )
 
 type (
 	Photon struct {
 		httpClientPool sync.Pool
 		contextPool    sync.Pool
-		middleware     HandlerFunc
-		respCallBack   HandlerFunc
-		errCallBack    HandlerFunc
-		wait           sync.WaitGroup
-		filterFunc     func(*Context) bool
-		limitFunc      func() <-chan interface{}
-		limitChan      <-chan interface{}
-		parallelChan   chan interface{}
+
+		wait         sync.WaitGroup
+		filterFunc   func(*Context) bool
+		limitFunc    func() <-chan interface{}
+		limitChan    <-chan interface{}
+		parallelChan chan interface{}
+		callback
+	}
+	callback struct {
+		requestCallbacks []HandlerFunc
+		respCallbacks    []HandlerFunc
+		errCallbacks     []HandlerFunc
+		scrapedCallbacks []HandlerFunc
 	}
 
-	HandlerFunc func(*Context)
-
-	MiddlewareFunc func(HandlerFunc) HandlerFunc
-
+	HandlerFunc      func(*Context)
+	MiddlewareFunc   func(*Photon)
 	PhotonOptionFunc func(*Photon)
 )
 
@@ -96,19 +94,9 @@ func (p *Photon) ApplyLimitFunc(f func() <-chan interface{}) {
 }
 
 func (p *Photon) Use(middlewares ...MiddlewareFunc) {
-	if p.middleware == nil {
-		middlewareRWMutex.Lock()
-		p.middleware = nilHandler
-		middlewareRWMutex.Unlock()
+	for i := 0; i < len(middlewares); i++ {
+		middlewares[i](p)
 	}
-	h := p.middleware
-	// Chain middleware
-	for i := len(middlewares) - 1; i >= 0; i-- {
-		h = middlewares[i](h)
-	}
-	middlewareRWMutex.Lock()
-	p.middleware = h
-	middlewareRWMutex.Unlock()
 }
 
 func (p *Photon) Wait() {
@@ -141,19 +129,24 @@ func New(options ...PhotonOptionFunc) (p *Photon) {
 	p.ApplyLimitFunc(p.limitFunc)
 
 	p.parallelChan = make(chan interface{}, parallelNumber)
-	p.middleware = nilHandler
 	return p
+}
+
+func (p *Photon) OnRequest(cb HandlerFunc) {
+	callBackRWMutex.Lock()
+	p.requestCallbacks = append(p.requestCallbacks, cb)
+	callBackRWMutex.Unlock()
 }
 
 func (p *Photon) OnResponse(cb HandlerFunc) {
 	callBackRWMutex.Lock()
-	p.respCallBack = cb
+	p.respCallbacks = append(p.respCallbacks, cb)
 	callBackRWMutex.Unlock()
 }
 
 func (p *Photon) OnError(cb HandlerFunc) {
 	callBackRWMutex.Lock()
-	p.errCallBack = cb
+	p.errCallbacks = append(p.errCallbacks, cb)
 	callBackRWMutex.Unlock()
 }
 
@@ -182,8 +175,6 @@ func (p *Photon) VisitRequest(req *http.Request, visitOptions ...VisitOptionFunc
 		return
 	}
 
-	p.middleware(ctx)
-
 	p.wait.Add(1)
 	p.parallelChan <- true
 	go func(ctx *Context) {
@@ -205,24 +196,25 @@ func (p *Photon) process(ctx *Context) {
 	req := ctx.Request()
 	var resp = new(Response)
 
-	ctx.Stage = StageDownloadBefore
-	p.middleware(ctx)
-
+	p.execHandleFunc(ctx, p.requestCallbacks)
 	resp.Response, err = client.Do(req)
-	ctx.Stage = StageDownloadAfter
 	ctx.Response = resp
 	ctx.SetError(err)
 
-	p.middleware(ctx)
-
 	if ctx.Error() != nil {
 		callBackRWMutex.RLock()
-		p.errCallBack(ctx)
+		p.execHandleFunc(ctx, p.errCallbacks)
 		callBackRWMutex.RUnlock()
 		return
 	}
 
 	callBackRWMutex.RLock()
-	p.respCallBack(ctx)
+	p.execHandleFunc(ctx, p.respCallbacks)
 	callBackRWMutex.RUnlock()
+}
+
+func (p *Photon) execHandleFunc(ctx *Context, callbacks []HandlerFunc) {
+	for i := 0; i < len(callbacks); i++ {
+		callbacks[i](ctx)
+	}
 }
