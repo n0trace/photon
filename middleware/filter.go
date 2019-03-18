@@ -12,6 +12,10 @@ type FilterConfig struct {
 func FilterWithConfig(config FilterConfig) photon.MiddlewareFunc {
 	return func(next photon.HandlerFunc) photon.HandlerFunc {
 		return func(ctx photon.Context) {
+			if ctx.Downloaded() {
+				next(ctx)
+				return
+			}
 			filter := config.FilterFunc(ctx)
 			if !filter {
 				next(ctx)

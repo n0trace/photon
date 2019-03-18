@@ -19,11 +19,8 @@ func DecodingWithConfig(config DecodingConfig) photon.MiddlewareFunc {
 				return
 			}
 			resp := ctx.StdResponse()
-			contentEncoding := resp.Header.Get("Content-Encoding")
-			contentType := resp.Header.Get("Content-Type")
-			switch {
-			case strings.Contains(contentEncoding, "gzip"),
-				strings.Contains(contentType, "gzip"):
+			switch strings.ToLower(resp.Header.Get("Content-Encoding")) {
+			case "gzip":
 				gzipReader, err := gzip.NewReader(resp.Body)
 				if err != nil {
 					ctx.SetError(err)
@@ -31,8 +28,7 @@ func DecodingWithConfig(config DecodingConfig) photon.MiddlewareFunc {
 				}
 				resp.Body = gzipReader
 				return
-			case strings.Contains(contentEncoding, "deflate"),
-				strings.Contains(contentType, "deflate"):
+			case "deflate":
 				flateReader := flate.NewReader(resp.Body)
 				resp.Body = flateReader
 			default:

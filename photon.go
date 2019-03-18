@@ -49,10 +49,8 @@ func (p *Photon) process(ctx Context, cb HandlerFunc, middlewares ...MiddlewareF
 	if cb == nil {
 		cb = nilHandler
 	}
-	pre := applyMiddleware(cb, append(middlewares, downloadMiddleware)...)
-	after := applyMiddleware(nilHandler, middlewares...)
+	pre := applyMiddleware(cb, append(append(middlewares, downloadMiddleware), middlewares...)...)
 	pre(ctx)
-	after(ctx)
 }
 
 //Get Get

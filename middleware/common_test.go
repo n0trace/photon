@@ -56,8 +56,9 @@ func newTestServer() *httptest.Server {
 	})
 
 	mux.HandleFunc("/gzip-hello", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Encoding", "gzip")
 		gzipWriter := gzip.NewWriter(w)
+		defer gzipWriter.Flush()
 		_, err := gzipWriter.Write([]byte("hello"))
 		if err != nil {
 			panic(err)

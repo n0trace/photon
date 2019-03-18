@@ -1,6 +1,7 @@
 package middleware_test
 
 import (
+	"log"
 	"sync/atomic"
 	"testing"
 
@@ -16,9 +17,9 @@ func TestFilter(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		p.Get(newTestServer().URL, func(ctx photon.Context) {
 			atomic.AddInt64(&times, 1)
+			log.Println("lalala")
 		})
 	}
-	p.Wait()
 	if atomic.LoadInt64(&times) != 1 {
 		t.Errorf("callback function execution %v times, want %v", atomic.LoadInt64(&times), 1)
 	}
