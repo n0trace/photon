@@ -1,6 +1,5 @@
 # photon
 
-
 [![Build Status][1]][2]  [![codecov.io][3]][4] [![Go Report][5]][6]  [![codebeat][7]][8] 
 
 [1]: https://travis-ci.org/n0trace/photon.svg?branch=master "Build Status badge"
@@ -27,3 +26,10 @@ This repo relies on the following third-party projects:
 
 * In production:
   * [PuerkitoBio/goquery](https://github.com/PuerkitoBio/goquery)
+
+
+TODO:
+
+- [] add log
+- [] complete document and comment
+- [] complete test
