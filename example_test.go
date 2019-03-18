@@ -23,9 +23,9 @@ func Example() {
 func Example_useMiddleware() {
 	rootURL := newTestServer().URL
 	p := photon.New()
-	p.Use(middleware.Limit(20*time.Millisecond), middleware.UserAgent())
+	p.Use(middleware.Limit(200*time.Millisecond), middleware.UserAgent("diy-agent"))
 	for i := 0; i != 3; i++ {
-		url := fmt.Sprintf("%s/users?id=hello-%d", rootURL, i)
+		url := fmt.Sprintf("%s/user-agent", rootURL)
 		p.Get(url, func(ctx photon.Context) {
 			text, _ := ctx.Text()
 			fmt.Println(text)
@@ -35,10 +35,11 @@ func Example_useMiddleware() {
 	//p.Get(url,callback,middleware...)
 	p.Wait()
 	//Output:
-	//hello-0
-	//hello-1
-	//hello-2
+	//diy-agent
+	//diy-agent
+	//diy-agent
 }
+
 func Example_keepAuth() {
 	p := photon.New()
 

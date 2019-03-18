@@ -45,9 +45,14 @@ func newTestServer() *httptest.Server {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
+
 	mux.HandleFunc("/must-login", func(w http.ResponseWriter, r *http.Request) {
 		cookie, _ := r.Cookie("username")
 		w.Write([]byte("hello " + cookie.Value))
+	})
+
+	mux.HandleFunc("/user-agent", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(r.Header.Get("User-Agent")))
 	})
 
 	return httptest.NewServer(mux)
