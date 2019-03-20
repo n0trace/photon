@@ -34,7 +34,6 @@ type Context interface {
 
 type context struct {
 	Response
-	error      error
 	stdRequest *http.Request
 	stdClient  *http.Client
 	photon     *Photon
@@ -67,11 +66,11 @@ func (c *context) Reset() {
 }
 
 func (c *context) Error() error {
-	return c.error
+	return c.Response.err
 }
 
 func (c *context) SetError(err error) {
-	c.error = err
+	c.Response.err = err
 }
 
 func (c *context) StdResponse() *http.Response {

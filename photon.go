@@ -74,10 +74,10 @@ func (p *Photon) Request(req *http.Request, cb HandlerFunc, middleware ...Middle
 	p.wait.Add(1)
 	p.parallelChan <- true
 	go func(ctx Context) {
-		defer p.wait.Done()
 		defer func() {
 			<-p.parallelChan
 			ctx.Finish()
+			p.wait.Done()
 		}()
 		p.process(ctx, cb, append(p.middlewares, middleware...)...)
 	}(ctx)

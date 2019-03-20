@@ -18,6 +18,7 @@ type Response struct {
 	ctx          Context
 	bodyBytes    []byte
 	readBodyOnce sync.Once
+	err          error
 }
 
 // Text get text from response.Body
@@ -28,6 +29,9 @@ func (resp *Response) Text() (text string, err error) {
 
 // Bytes get []byte from response.Body
 func (resp *Response) Bytes() (bodyBytes []byte, err error) {
+	if resp.err != nil {
+		return []byte{}, err
+	}
 	var buf = bytes.NewBuffer(nil)
 	var newReader io.Reader
 	resp.readBodyOnce.Do(func() {

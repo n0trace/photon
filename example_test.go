@@ -2,6 +2,9 @@ package photon_test
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"time"
 
@@ -62,4 +65,33 @@ func Example_keepAuth() {
 	//Output:
 	//ok
 	//hello foo
+}
+
+func newTestServer() *httptest.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/users", func(w http.ResponseWriter, r *http.Request) {
+		u, err := url.Parse(r.RequestURI)
+		if err != nil {
+			panic(err)
+		}
+		w.Write([]byte(u.Query().Get("id")))
+	})
+
+	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+		cookie := http.Cookie{Name: "username", Value: r.FormValue("username"), Path: "/", MaxAge: 86400}
+		http.SetCookie(w, &cookie)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
+	mux.HandleFunc("/must-login", func(w http.ResponseWriter, r *http.Request) {
+		cookie, _ := r.Cookie("username")
+		w.Write([]byte("hello " + cookie.Value))
+	})
+
+	mux.HandleFunc("/user-agent", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(r.Header.Get("User-Agent")))
+	})
+
+	return httptest.NewServer(mux)
 }
